@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, Depends, status
 from config.connection import engine, session
 from sqlalchemy.orm import Session
 from ftplib import FTP
+import uvicorn
 
 app = FastAPI()
 model.mbrand.Base.metadata.create_all(bind=engine)
@@ -224,3 +225,8 @@ async def getProviderId(providerId: int, db: Session = db_dependency):
 ###
 ### Fin Rutas
 ###
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+
+    uvicorn.run(app, host="0.0.0.0", port=port)
+    input("Presiona Enter para salir...")
