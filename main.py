@@ -2,9 +2,12 @@ import model.mbrand
 import model.mmodel
 import model.mproduct
 import model.mprovider
+import base64
+import io
 from fastapi import FastAPI, HTTPException, Depends, status
 from config.connection import engine, session
 from sqlalchemy.orm import Session
+from ftplib import FTP
 
 app = FastAPI()
 model.mbrand.Base.metadata.create_all(bind=engine)
@@ -20,7 +23,20 @@ db_dependency = Depends(get_db)
 ###
 ### Controladores
 ###
+def putFile(fileName, fileContent):
+    try:
+        ftp = FTP('127.0.0.1')
+        ftp.login(user='FTP_Lara', passwd='lara1234*')
 
+        buffer = io.BytesIO(fileContent)
+        buffer.seek(0)
+
+        ftp.storbinary(f'STOR {fileName}', buffer)
+
+        print(f"El archivo {fileName} se ha subido correctamente")
+        ftp.quit()
+    except Exception as e:
+        print(f"Error al subir archivo al servidor FTP {e}")
 ### Marcas
 def createBrand(db: Session, name:str):
     brand = model.mbrand.Brand(name=name)
@@ -42,11 +58,18 @@ def getBrandById(db: Session, brandId: int):
     return brand
 ### Fin Marcas
 ### Modelos
-def createModel(db: Session, brandId: str, name: str, version: str, gender: str):
-    models = model.mmodel.Model(brandId=brandId, name=name, version=version, gender=gender)
-    db.add(models)
-    db.commit()
-    return {"status": "Se ha creado correctamente el modelo"}
+def createModel(db: Session, brandId: str, name: str, version: str, gender: str, file_base64: str = None):
+    try:
+        if file_base64:
+            decode_file = base64.b64decode(file_base64)
+            putFile(f"{name}_{version}.jpg", decode_file)
+
+        models = model.mmodel.Model(brandId=brandId, name=name, version=version, gender=gender)
+        db.add(models)
+        db.commit()
+        return {"status": "Se ha creado correctamente el modelo"}
+    except Exception as e:
+        return {"error": f"Error al procesar archivos: {e}"}
 
 def getModel(db: Session, brandId: str, name: str, version: str, gender: str):
     models = db.query(model.mmodel.Model)
@@ -102,13 +125,13 @@ def getProductById(db: Session, productId: int):
 ### Fin Productos
 ### Proveedores
 
-def createProvider(db: Session, commercialName: str, fiscalName: str, rfc: str, addres: str, phone: str, isCredit: int, creditDay: int, typeProvider: str, account: str):
-    provider = model.mprovider.Provider(commercialName=commercialName, fiscalName=fiscalName, rfc=rfc, address=addres, phone=phone, isCredit=isCredit, crediDay=creditDay, typeProvider=typeProvider, account=account)
+def createProvider(db: Session, commercialName: str, fiscalName: str, rfc: str, address: str, phone: str, isCredit: int, creditDay: int, typeProvider: str, account: str):
+    provider = model.mprovider.Provider(commercialName=commercialName, fiscalName=fiscalName, rfc=rfc, address=address, phone=phone, isCredit=isCredit, crediDay=creditDay, typeProvider=typeProvider, account=account)
     db.add(provider)
     db.commit()
     return {"status": "se ha creado correctamente el proveedor"}
 
-def getProvider(db: Session, commercialName: str, fiscalName: str, rfc: str, addres: str, phone: str, isCredit: int, creditDay: int, typeProvider: str, account: str):
+def getProvider(db: Session, commercialName: str, fiscalName: str, rfc: str, address: str, phone: str, isCredit: int, creditDay: int, typeProvider: str, account: str):
     providers = db.query(model.mprovider.Provider)
     if commercialName:
         providers = providers.filter(model.mprovider.Provider.commercialName.like(f"%{commercialName}%"))
@@ -116,8 +139,8 @@ def getProvider(db: Session, commercialName: str, fiscalName: str, rfc: str, add
         providers = providers.filter(model.mprovider.Provider.fiscalName.like(f"%{fiscalName}%"))
     if rfc:
         providers = providers.filter(model.mprovider.Provider.rfc.like(f"%{rfc}%"))
-    if addres:
-        providers = providers.filter(model.mprovider.Provider.address.like(f"%{addres}%"))
+    if address:
+        providers = providers.filter(model.mprovider.Provider.address.like(f"%{address}%"))
     if phone:
         providers = providers.filter(model.mprovider.Provider.phone.like(f"%{phone}%"))
     if isCredit:
@@ -157,8 +180,8 @@ async def getBrandId(brandId: int=None, db: Session = db_dependency):
 ### Fin Marcas
 ### Modelos
 @app.post("/createModel/")
-async def newModel(brandId: str=None, name: str=None, version: str=None, gender: str=None, db: Session = db_dependency):
-    return createModel(db, brandId, name, version, gender)
+async def newModel(brandId: str=None, name: str=None, version: str=None, gender: str=None, file_base64: str = None,db: Session = db_dependency):
+    return createModel(db, brandId, name, version, gender, file_base64)
 
 @app.get("/models/")
 async def getModels(brandId: str=None, name: str=None, version: str=None, gender: str=None, db: Session = db_dependency):
@@ -186,8 +209,8 @@ async def getProductId(productId: int=None, db: Session = db_dependency):
 ### Proveedores
 
 @app.post("/createProvider/")
-async def newProvider(commercialName: str, fiscalName: str, rfc: str, addres: str, phone: str, isCredit: int, creditDay: int, typeProvider: str, account: str, db: Session = db_dependency):
-    return createProvider(db, commercialName, fiscalName, rfc, addres, phone, isCredit, creditDay, typeProvider, account)
+async def newProvider(commercialName: str, fiscalName: str, rfc: str, address: str, phone: str, isCredit: int=0, creditDay: int=0, typeProvider: str='FI', account: str='', db: Session = db_dependency):
+    return createProvider(db, commercialName, fiscalName, rfc, address, phone, isCredit, creditDay, typeProvider, account)
 
 @app.get("/providers/")
 async def getProviders(commercialName: str=None, fiscalName: str=None, rfc: str=None, addres: str=None, phone: str=None, isCredit: int=None, creditDay: int=None, typeProvider: str=None, account: str=None, db: Session = db_dependency):
